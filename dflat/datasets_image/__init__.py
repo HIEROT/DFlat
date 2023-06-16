@@ -1,0 +1,1 @@
+from .load_general_images import get_grayscale_image

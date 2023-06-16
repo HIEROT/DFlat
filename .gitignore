@@ -1,0 +1,10 @@
+.vscode
+*DS_Store
+**.egg-info
+
+DEAN_TEST_STUDIES/**
+DEAN_EXCLUDE_WORK/**
+TRASH/**
+/dflat/neural_optical_layer/core/trained_MLP_models/
+/dflat/neural_optical_layer/core/fitted_regression_models/
+/MyScripts/output/

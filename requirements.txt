@@ -1,0 +1,13 @@
+scikit-learn
+numpy
+tensorflow
+tensorflow_probability
+matplotlib
+scipy
+keras_flops
+mat73
+opencv-python
+pandas
+gdspy
+imageio
+tqdm
