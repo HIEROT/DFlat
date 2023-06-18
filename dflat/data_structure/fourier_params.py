@@ -13,6 +13,7 @@ ALL_MANDATORY_KEYS = [
     "sensor_pixel_number",  # Number of output/sensor "pixels" along x and y
     "radial_symmetry",  # Flag whether the input has radial symmetry and is given by a radial vector
     "diffractionEngine",  # Allow selection of Fresnel or ASM diffraction engine
+    "num_rows_per_MLP_forward",  # Number of rows per MLP in the forward pass
 ]
 
 diffractionEngines = ["fresnel_fourier", "ASM_fourier"]

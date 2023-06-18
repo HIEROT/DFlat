@@ -23,7 +23,7 @@ class MLP_Layer(tf.keras.layers.Layer):
             specifies wavelength.
     """
 
-    def __init__(self, model_name, dtype=tf.float64):
+    def __init__(self, model_name, dtype=tf.float32):
         """Initialize the mlp_latent_layer.
         Args:
             `model_name` (str): Name of the MLP model to use. See up-to-date documentation for valid models.
@@ -41,7 +41,7 @@ class MLP_Layer(tf.keras.layers.Layer):
     def __call__(self, norm_param, wavelength_m_asList):
         """Call function for the mlp_layer. Given a normalized parameter vector for each
         cell and a list of wavelengths to evaluate the optical response for, the MLP predicted phase and
-        transmittance for each wavelength channel is returned.
+        transmission for each wavelength channel is returned.
 
         Args:
             `norm_param` (tf.float): Tensor of cells normalized shape parameters (see technical documents and
@@ -50,7 +50,7 @@ class MLP_Layer(tf.keras.layers.Layer):
                 structure's optical response at.
 
         Returns:
-            `list`: List containing transmittance in the first argument and phase in the second, of shape
+            `list`: List containing transmission in the first argument and phase in the second, of shape
                 (len(wavelength_m_asList), p, gridShape[-2], gridShape[-1]), where p = 1 or 2 depending on the model.
         """
 
@@ -140,7 +140,7 @@ class MLP_Latent_Layer(MLP_Layer):
             specifies wavelength.
     """
 
-    def __init__(self, model_name, pmin=0, pmax=1, dtype=tf.float64):
+    def __init__(self, model_name, pmin=0, pmax=1, dtype=tf.float32):
         """Initialize the mlp_latent_layer.
 
         Args:

@@ -1,7 +1,9 @@
+import numpy as np
 import tensorflow as tf
 from .util_neural import leakyrelu100, gaussian_activation
 from .arch_Parent_class import MLP_Nanofins_U350_H600, MLP_Nanocylinders_U180_H600, MLP_Nanocylinders_U540_H750
-from .arch_Core_class import GFF_Projection_layer, GFF_Projection_layer
+from .arch_Core_class import GFF_Projection_layer, GFF_Projection_layer, MLP_Object
+from dflat.datasets_metasurface_cells import libraryClass as library
 
 mlp_model_names = [
     "MLP_Nanocylinders_Dense256_U180_H600",
@@ -36,27 +38,66 @@ class MLP_Nanocylinders_Dense128_U540_H750(MLP_Nanocylinders_U540_H750):
             tf.keras.layers.Dense(3, kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=0.1)),
         ]
 
-class MLP_Nanocylinders_Dense128_U650_H800(MLP_Nanocylinders_U540_H750):
-    def __init__(self, dtype=tf.float64):
-        super(MLP_Nanocylinders_Dense128_U650_H800, self).__init__(dtype)
+class MLP_Nanocylinders_Dense128_U650_H800(MLP_Object):
+    def __init__(self, dtype=tf.float32):
+        super().__init__()
 
         self.set_model_name("MLP_Nanocylinders_Dense128_U650_H800")
         self.set_modelSavePath("trained_MLP_models/MLP_Nanocylinders_Dense128_U650_H800/")
-
+        self.set_preprocessDataBounds([[80e-9, 325e-9], [1530e-9, 1565e-9]], ["radius_m", "wavelength_m"])
+        self.set_model_dtype(dtype)
+        self.set_input_shape((2,))
+        self.set_output_pol_state(1)
         # Define a new architecture
         self._arch = [
             tf.keras.layers.Dense(
-                128,
+                64,
                 activation=leakyrelu100,
                 kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=0.1),
             ),
             tf.keras.layers.Dense(
-                128,
+                64,
                 activation=leakyrelu100,
                 kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=0.1),
             ),
             tf.keras.layers.Dense(3, kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=0.1)),
         ]
+
+    def returnLibraryAsTrainingData(self):
+        # FDTD generated data loaded from library class file
+        useLibrary = library.Nanocylinders_U650nm_H800nm()
+        params = useLibrary.params
+        phase = useLibrary.phase
+        transmission = useLibrary.transmission
+
+        # Normalize inputs (always done based on self model normalize function)
+        normalizedParams = self.normalizeInput(params)
+        trainx = np.stack([param.flatten() for param in normalizedParams], -1)
+        trainy = np.stack(
+            [
+                np.cos(phase[:, :]).flatten(),  # cos of phase x polarized light
+                np.sin(phase[:, :]).flatten(),  # sin of phase x polarized light
+                transmission[:, :].flatten(),  # x transmission
+            ],
+            -1,
+        )
+
+        return trainx, trainy
+
+    def get_trainingParam(self):
+        useLibrary = library.Nanocylinders_U650nm_H800nm()
+        return useLibrary.params
+
+    def convert_output_complex(self, y_model, reshapeToSize=None):
+        phasex = tf.math.atan2(y_model[:, 1], y_model[:, 0])
+        transx = y_model[:, 2]
+
+        # allow an option to reshape to a grid size (excluding data stack width)
+        if reshapeToSize is not None:
+            phasex = tf.reshape(phasex, reshapeToSize)
+            transx = tf.reshape(transx, reshapeToSize)
+
+        return transx, phasex
 
 
 ## USABLE MLP MODELS

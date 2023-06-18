@@ -1,3 +1,5 @@
+import collections
+
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
@@ -38,27 +40,67 @@ class pipeline_Metalens_MLP(df_optimizer.Pipeline_Object):
         mlp_model = "MLP_Nanocylinders_Dense128_U650_H800"
         self.cell_parameterization = "cylindrical_nanoposts"
         self.mlp_latent_layer = df_neural.MLP_Latent_Layer(mlp_model)
-        self.f_layer = df_fourier.Propagate_Planes_Layer_MatrixBroadband(propagation_parameters)
+
+        self.f_layer = df_fourier.Propagate_Planes_Layer(propagation_parameters)
 
         # Define initial starting condition for the metasurface latent tensor
-        init_latent_tensor = tf.zeros(propagation_parameters["grid_shape"], dtype=tf.float64)
-        self.latent_tensor_variable = tf.Variable(init_latent_tensor, trainable=True, dtype=tf.float64)
+        self.latent_tensor_variable = [*pipeline_Metalens_MLP.createRow(self.propagation_parameters["grid_shape"], self.propagation_parameters["num_rows_per_MLP_forward"], 150e-9)]
         self.customLoad()  # Load the last saved state of the optimization, if it exists
 
         return
 
     def __call__(self):
-        # Compute the PSF
         wavelength_set_m = self.propagation_parameters["wavelength_set_m"]
-        out = self.mlp_latent_layer(self.latent_tensor_variable, wavelength_set_m)
-        f_amp, f_phase = self.f_layer(out)
-
+        # trans = []
+        # phase = []
+        num_slices = len(self.latent_tensor_variable)
+        num_wavelengths = len(wavelength_set_m)
+        def lambdaCond(_idx, _trans, _phase):
+            return tf.less(_idx, num_slices)
+        def lambdaBody(_idx, _trans, _phase):
+            trans, phase = self.mlp_latent_layer(self.latent_tensor_variable[_idx], wavelength_set_m)
+            _trans = tf.concat([_trans, trans], 3)
+            _phase = tf.concat([_phase, phase], 3)
+            _idx += 1
+            return [_idx, _trans, _phase]
+        idx = tf.constant(0)
+        hold_trans = tf.zeros([num_wavelengths, 1, self.propagation_parameters["grid_shape"][1], 0], dtype=tf.float32)
+        hold_phase = tf.zeros([num_wavelengths, 1, self.propagation_parameters["grid_shape"][1], 0], dtype=tf.float32)
+        loopData = tf.while_loop(
+            lambdaCond,
+            lambdaBody,
+            loop_vars=[idx, hold_trans, hold_phase],
+            shape_invariants=[
+                idx.get_shape(),
+                tf.TensorShape([num_wavelengths, 1, self.propagation_parameters["grid_shape"][1], None]),
+                tf.TensorShape([num_wavelengths, 1, self.propagation_parameters["grid_shape"][1], None]),
+            ],
+            swap_memory=True
+        )
+        # for latenti in self.latent_tensor_variable:
+        #     tmp1, tmp2 = self.mlp_latent_layer(latenti, wavelength_set_m)
+        #     trans.append(tmp1)
+        #     phase.append(tmp2)
+        # trans = tf.concat(trans, 3)
+        # phase = tf.concat(phase, 3)
+        f_amp, f_phase = self.f_layer([loopData[1], loopData[2]])
         # Save the last lens and psf for plotting later
-        self.last_lens = out
+        self.last_lens = [loopData[1], loopData[2]]
         self.last_amp = f_amp
         self.last_pha = f_phase
-
         return arg_phase_to_complex(f_amp, f_phase)
+
+    @staticmethod
+    def createRow(grid_shape, num_rows_per_MLP_forward, init_value):
+        num_row = grid_shape[2]
+        index1 = 0
+        index2 = min(num_rows_per_MLP_forward, num_row)
+        while index2 <= num_row:
+            yield tf.Variable(tf.zeros([grid_shape[0], grid_shape[1], index2 - index1], dtype=tf.float32) + init_value, trainable=True)
+            if index2 == num_row: break
+            index1 = index2
+            index2 += num_rows_per_MLP_forward
+            index2 = min(index2, num_row)
 
     def visualizeTrainingCheckpoint(self, saveto: str = None):
         '''
@@ -200,23 +242,24 @@ def optimize_metalens_mlp(radial_symmetry, num_epochs=30, try_gpu=True):
 
     # Define Fourier parameters
     wavelength_list = np.linspace(1535e-9, 1565e-9, 5)
-    radius = 1e-6
     propagation_parameters = df_struct.prop_params(
         {
             "wavelength_set_m": wavelength_list,
-            "ms_samplesM": {"x": 1024, "y": 1024},
-            "ms_dx_m": {"x": 2 * 650e-9, "y": 2 * 650e-9},
-            "radius_m": 1.e-3 / 2.,
+            "ms_samplesM": {"x": 1540, "y": 1540},
+            "ms_dx_m": {"x": 650e-9, "y": 650e-9},
+            "radius_m": 1e-3 / 2.,
             "sensor_distance_m": 1e-3,
             "initial_sensor_dx_m": {"x": 1e-6, "y": 1e-6},
             "sensor_pixel_size_m": {"x": 1e-6, "y": 1e-6},
             "sensor_pixel_number": {"x": 256, "y": 256},
             "radial_symmetry": radial_symmetry,
-            "diffractionEngine": "ASM_fourier",
+            "diffractionEngine": "fresnel_fourier",
             ### Optional keys
-            "automatic_upsample": True,
+            "automatic_upsample": False,
             # If true, it will try to automatically determine good upsample factor for calculations
             # "manual_upsample_factor": 1,  # Otherwise you can manually dictate upsample factor
+            "num_rows_per_MLP_forward": 100
+            # limit memory usage by breaking up the forward pass into chunks
         })
 
     '''
@@ -280,4 +323,15 @@ def optimize_metalens_mlp(radial_symmetry, num_epochs=30, try_gpu=True):
 
 
 if __name__ == "__main__":
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        try:
+            # Currently, memory growth needs to be the same across GPUs
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+            logical_gpus = tf.config.list_logical_devices('GPU')
+            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+        except RuntimeError as e:
+            # Memory growth must be set before GPUs have been initialized
+            print(e)
     optimize_metalens_mlp(radial_symmetry=False, num_epochs=150, try_gpu=False)

@@ -1,3 +1,5 @@
+import os
+
 import tensorflow as tf
 import numpy as np
 import pickle
@@ -180,6 +182,8 @@ def train_caller(train=True, verb=True):
 
 
 if __name__ == "__main__":
+    # for key in os.environ:
+    #     print(key, os.environ[key])
     train_caller(train=True, verb=True)
 
    

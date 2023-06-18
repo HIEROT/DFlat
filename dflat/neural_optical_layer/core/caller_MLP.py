@@ -3,7 +3,7 @@ import numpy as np
 
 
 def batched_broadband_MLP(norm_param, mlp_model, wavelength_m_asList, gridShape):
-    """Returns the transmittance (Not transmission although the MLP was trained on transmission). Utilizes a for-loop
+    """Returns the transmission. Utilizes a for-loop
     to batch over input wavelengths in order to not overload users memory
 
     Args:
@@ -33,7 +33,7 @@ def batched_broadband_MLP(norm_param, mlp_model, wavelength_m_asList, gridShape)
         trans, phase = mlp_model.convert_output_complex(mlp_model(mlp_input), gridShape)
         # When we return sqrt(Trans), it is possible for some trans to be negative during model training which would
         # cause NaN values if this clipping is not done! It is important
-        trans = tf.clip_by_value(trans, 0.0, 2.0)
+        # trans = tf.clip_by_value(trans, 0.0, 2.0)
 
         hold_trans_ = tf.concat([hold_trans_, tf.expand_dims(trans, 0)], axis=0)
         hold_phase_ = tf.concat([hold_phase_, tf.expand_dims(phase, 0)], axis=0)
@@ -54,10 +54,11 @@ def batched_broadband_MLP(norm_param, mlp_model, wavelength_m_asList, gridShape)
             tf.TensorShape([None, output_stack_dim] + gridShape[1:]),
             tf.TensorShape([None, output_stack_dim] + gridShape[1:]),
         ],
+        swap_memory=True
     )
 
     return (
-        tf.math.sqrt(tf.stack(loopData[1][1:])),
+        tf.stack(loopData[1][1:]),
         tf.stack(loopData[2][1:]),
     )
 
