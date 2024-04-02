@@ -151,8 +151,8 @@ def fresnel_diffraction_coeffs(
             tf.range(output_pixel_number["x"], dtype=dtype),
             tf.range(output_pixel_number["y"], dtype=dtype),
         )
-        output_pixel_x = output_pixel_x - (tf.shape(output_pixel_x)[1] - 1) / 2
-        output_pixel_y = output_pixel_y - (tf.shape(output_pixel_y)[0] - 1) / 2
+        output_pixel_x = output_pixel_x - tf.cast((tf.shape(output_pixel_x)[1] - 1), dtype=dtype) / tf.constant(2, dtype=dtype)
+        output_pixel_y = output_pixel_y - tf.cast((tf.shape(output_pixel_y)[0] - 1), dtype=dtype) / tf.constant(2, dtype=dtype)
     output_pixel_x = output_pixel_x * output_pixel_size_m["x"]
     output_pixel_y = output_pixel_y * output_pixel_size_m["y"]
     output_pixel_x = tf.expand_dims(output_pixel_x, 0)

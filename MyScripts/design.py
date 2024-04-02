@@ -13,12 +13,13 @@ import dflat.plot_utilities as plt_util
 import dflat.tools as df_tools
 
 from dflat.physical_optical_layer.core.ms_parameterization import generate_cell_perm
+from scipy.io import savemat
 from myutils import *
 
 
 class loss_fn():
     def __init__(self, shape, unit, mode_radius):
-        self.target_mode = tf.convert_to_tensor(gaussian(shape, unit, mode_radius), dtype=tf.complex128)
+        self.target_mode = tf.convert_to_tensor(gaussian(shape, unit, mode_radius), dtype=tf.complex64)
 
     def __call__(self, pipeline_output):
         # (len(sim_wavelengths), batch_size, sensor_pixel_number["y"], sensor_pixel_number["x"])
@@ -204,20 +205,20 @@ class pipeline_Metalens_MLP(df_optimizer.Pipeline_Object):
         out = self.__call__()
         for i in range(num_wl):
             efficiency[i] = cross_integral(out[i, 0], loss_fn.target_mode) ** 2 * unit ** 2\
-                            / (np.pi * self.propagation_parameters["radius_m"]**2)
+                            / (np.pi * self.propagation_parameters["radius_m"]**2) * 10
             # here we have already normalized the target mode to 1, but the unit there is ignored, and the unit in the
             # cross_integral is ignored as well, so we need to multiply by the unit squared
             # because the incident field amplitude is 1, the area of the aperture is equal to its enclosed power
         fig = plt.figure(figsize=(5, 5))
         ax = plt_util.addAxis(fig, 1, 1)
-        ax[0].plot(sim_wavelengths * 1e6, efficiency * 100, "k-")
+        ax[0].plot(sim_wavelengths * 1e9, efficiency * 100, "k-")
         plt_util.formatPlots(
             fig,
             ax[0],
             None,
-            xlabel="wavelength (um)",
-            ylabel="coupling efficiency (%)",
-            title=f"coupling efficiency",
+            xlabel="wavelength (nm)",
+            ylabel="Focus Efficiency (%)",
+            title="Focus Efficiency",
             fontsize_text=12,
             fontsize_title=12,
             fontsize_ticks=12,
@@ -225,14 +226,13 @@ class pipeline_Metalens_MLP(df_optimizer.Pipeline_Object):
         savefigpath = self.savepath + "/trainingOutput/"
         plt.savefig(savefigpath + f"efficiency_{saveto}.png", dpi=300)
     def exportMetalens(self, saveto: str = None):
-        pass
-        ### Display some of the learned metacells
+
+        ## Display some of the learned metacells
         # We want to assemble the cell's dielectric profile, so we can plot it
-        # latent_tensor_state = self.latent_tensor_variable
-        # norm_shape_param = df_tools.latent_to_param(latent_tensor_state)
-        # ER, _ = generate_cell_perm(norm_shape_param, self.rcwa_parameters, self.cell_parameterization, feature_layer=0)
-        # disp_num = 5
-        # cell_idx = np.linspace(0, ER.shape[1] - 1, disp_num).astype(int)
+        latent_tensor_state = tf.concat(self.latent_tensor_variable, 2)
+        unnorm_shape = self.mlp_latent_layer.latent_to_unnorm_shape(latent_tensor_state)
+        savefigpath = self.savepath + "/trainingOutput/"
+        savemat(f"saved_lens_{saveto}.mat", {"radius_matrix": unnorm_shape.numpy()})
 
 def optimize_metalens_mlp(radial_symmetry, num_epochs=30, try_gpu=True):
     # Define save path
@@ -258,7 +258,7 @@ def optimize_metalens_mlp(radial_symmetry, num_epochs=30, try_gpu=True):
             "automatic_upsample": False,
             # If true, it will try to automatically determine good upsample factor for calculations
             # "manual_upsample_factor": 1,  # Otherwise you can manually dictate upsample factor
-            "num_rows_per_MLP_forward": 100
+            "num_rows_per_MLP_forward": 100,
             # limit memory usage by breaking up the forward pass into chunks
         })
 
@@ -315,7 +315,8 @@ def optimize_metalens_mlp(radial_symmetry, num_epochs=30, try_gpu=True):
     learning_rate = 2e-2
     optimizer = tf.keras.optimizers.Adam(learning_rate)
     lf = loss_fn((256, 256), 1e-6, 5e-6)
-    # pipeline.calculate_efficiency(lf, 1e-6, str(len(pipeline.loss_vector) if len(pipeline.loss_vector) else 0))
+    pipeline.calculate_efficiency(lf, 1e-6, str(len(pipeline.loss_vector) if len(pipeline.loss_vector) else 0))
+    pipeline.exportMetalens(str(len(pipeline.loss_vector) if len(pipeline.loss_vector) else 0))
     # pipeline.visualizeTrainingCheckpoint(str(len(pipeline.loss_vector) if len(pipeline.loss_vector) else 0))
     df_optimizer.run_pipeline_optimization(pipeline, optimizer, num_epochs=num_epochs, loss_fn=tf.function(lf),
                                            allow_gpu=try_gpu)
@@ -323,6 +324,7 @@ def optimize_metalens_mlp(radial_symmetry, num_epochs=30, try_gpu=True):
 
 
 if __name__ == "__main__":
+    tf.keras.backend.set_floatx('float32')
     gpus = tf.config.list_physical_devices('GPU')
     if gpus:
         try:

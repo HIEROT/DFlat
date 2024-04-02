@@ -43,8 +43,8 @@ def batched_broadband_MLP(norm_param, mlp_model, wavelength_m_asList, gridShape)
 
     # batch wavelength call
     idx = tf.constant(0, dtype=tf.int32)
-    hold_trans = tf.zeros([1, output_stack_dim] + gridShape[1:], dtype=dtype)
-    hold_phase = tf.zeros([1, output_stack_dim] + gridShape[1:], dtype=dtype)
+    hold_trans = tf.zeros([0, output_stack_dim] + gridShape[1:], dtype=dtype)
+    hold_phase = tf.zeros([0, output_stack_dim] + gridShape[1:], dtype=dtype)
     loopData = tf.while_loop(
         lambda_loopCond,
         lambda_loopBody,
@@ -58,8 +58,8 @@ def batched_broadband_MLP(norm_param, mlp_model, wavelength_m_asList, gridShape)
     )
 
     return (
-        tf.stack(loopData[1][1:]),
-        tf.stack(loopData[2][1:]),
+        tf.stack(loopData[1]),
+        tf.stack(loopData[2]),
     )
 
 

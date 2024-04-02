@@ -22,7 +22,7 @@ ALL_OPTIONAL_KEYS = {
     "manual_upsample_factor": 1,  # Factor to upsample the input fields when conducting calculations
     "automatic_upsample": False,  # Flag to indicate if DFlat should estimate and apply its own upsample factor
     "radius_m": None,  # Radius of a circular field aperture to consider against the square input field array
-    "dtype": tf.float64,
+    "dtype": tf.float32,
     "accurate_measurement": True,  # Development flag to control field resize correction at the output plane (Should be True when deploy)
     "ASM_Pad_opt": 1,  # Development flag to control field padding for ASM Field transformations
 }
